@@ -9,38 +9,58 @@ import jwt from "jsonwebtoken";
 
 //маршрутизатор запроса по регистрации пользователя
 router.post("/", async (req, res) => {
-    try
-    {
-        //ищем пользователя в модели базы данных UsersModel
-        const userExist = await UsersModel.findOne({ username: req.body.username});
-        //существующего пользователя удаляем из базы данных
-        if (userExist != undefined)
+    try 
+    {     
+        //проверяем есть ли регистрируемый пользователь в базе данных
+        UsersModel.findOne({username: req.body.username}, (err, userExist) => 
         {
-            UsersModel.findOneAndDelete(
+            //существующего пользователя удаляем из базы данных
+            if (userExist != undefined)
             {
-                username: req.body.username
-            },
-            (err, doc) => {
-            });
-        }
-        //шифруем пароль регистрируемого пользователя
-        const password = req.body.password;
-        const salt = await bcrypt.genSalt(10);
-        const hash = await bcrypt.hash(password, salt);
-        //составляем модель в базе данных MongoDB по регистрируемому пользователю
-        const doc = new UsersModel({
-            username: req.body.username,
-            password: hash
-        });
-        //фиксируем данные в базу данных MongoDB по регистрируемому пользователю
-        await doc.save();
-        res.json("SUCCESS");
-    }
-    catch (err)
+                UsersModel.findOneAndDelete(
+                {
+                    username: req.body.username
+                },
+                (err, doc) => {
+                });
+            }
+
+            //hash the password   
+            bcrypt.hash(req.body.password,10).then((hashedPassword) => 
+            {
+                //create a new user instance and collect the data
+                const user = new UsersModel({
+                    username: req.body.username,
+                    password: hashedPassword
+                });
+
+                //save the new user
+                user.save()
+                //return success if the new user is added to the database successfully
+                .then((_) => {
+                    res.json("SUCCESS");
+                })
+                //catch error if the new user wasn't added successfully to the database
+                .catch((error) => {
+                    res.status(500).send({
+                        message: "Error creating user",
+                        error
+                    })
+                })
+            })
+            //catch error if the password hash isn't successfull
+            .catch((e) => {
+                res.status(500).send({
+                    message: "Password was not hashed successfully",
+                    e
+                })
+            })
+        })
+    } 
+    catch (e) 
     {
-        res.status(500).json({
-            message: 'Failed to register'
-        });
+        console.log(e);
+        res.send({message: "Server error"})
     }
 })
 
